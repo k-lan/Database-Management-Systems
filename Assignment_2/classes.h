@@ -84,28 +84,7 @@ public:
             memcpy(&data[directoryStart], &start, sizeof(int));
         }
     }
-
-
-    // Write the page to a file
-    // void writeToFile(const std::string& filename) {
-    //     ofstream file(filename, ios::out | ios::binary);
-    //     if (file.is_open()) {
-    //         file.write(data.data(), PAGE_SIZE);
-    //         file.close();
-    //     }
-    // }
-
     
-    // void writeToFile(string fileName) {
-    //     ofstream file(fileName, ios::binary | ios::app);
-    //     if (file.is_open()) {
-    //         file.write(data.data(), PAGE_SIZE);
-    //         file.close();
-    //     } else {
-    //         cerr << "Failed to open .data file in Pages writeToFile function." << endl;
-    //         return;
-    //     }
-    // }
     // Write the page to a file
     void writeToFile(const std::string& fileName) {
         ofstream file(fileName, ios::binary | ios::app); // Open in append mode
@@ -210,20 +189,3 @@ public:
     }
 };
 
-
-
-// int main() {
-//     Page page;
-
-//     // Write records to the page
-//     page.writeRecord(record1);
-//     page.writeRecord(record2);
-
-//     // Write slot directory to the page
-//     page.writeSlotDirectory();
-
-//     // Write the page to a file
-//     page.writeToFile("page.data");
-
-//     return 0;
-// }

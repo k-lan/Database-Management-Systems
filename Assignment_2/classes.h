@@ -4,7 +4,14 @@
 #include <iostream>
 #include <sstream>
 #include <bitset>
+#include <cstring>
+
+// Can I use?
+#include <fstream>
+
 using namespace std;
+
+const int PAGE_SIZE = 4096;
 
 class Record {
 public:
@@ -24,41 +31,135 @@ public:
         cout << "\tBIO: " << bio << "\n";
         cout << "\tMANAGER_ID: " << manager_id << "\n";
     }
+
+    // Convert record to string representation for writing to file
+    std::string toString() const {
+        return std::to_string(id) + "|" + name + "|" + bio + "|" + std::to_string(manager_id) + "|";
+    }
+};
+
+class Page {
+private:
+    vector<char> data; // The actual data of the page
+    vector<pair<int, int>> slotDirectory; // (Starting position, length) of each record
+    int freeSpace;
+
+public:
+    Page() : data(PAGE_SIZE, '\0'), freeSpace(PAGE_SIZE - sizeof(int)) {} // freespace is initially page_size minus slot directory N
+
+    int getRecordSize() {
+        return slotDirectory.size();
+    }
+    // Write record to the page and update slot directory
+    bool writeRecord(const Record& record) {
+        std::string recordString = record.toString();
+        int recordLength = recordString.length();
+
+        if (recordLength + sizeof(int) * 2 > freeSpace) // Check if enough space is available
+            return false;
+
+        int start = PAGE_SIZE - freeSpace;
+        for (char c : recordString)
+            data[start++] = c;
+
+        slotDirectory.emplace_back(start - recordLength, recordLength);
+        freeSpace -= (recordLength + sizeof(int) * 2); // record and slotdirectory info
+        return true;
+    }
+
+    void writeSlotDirectory() {
+        int numSlots = slotDirectory.size();
+        int directoryStart = PAGE_SIZE - sizeof(int); // Start at the end of the page
+
+        // Write the number of slots at the end of the page
+        memcpy(&data[directoryStart], &numSlots, sizeof(int));
+
+        // Write the slot directory entries
+        for (auto& entry : slotDirectory) {
+            int start = entry.first;
+            int length = entry.second;
+            directoryStart -= sizeof(int); // Move backwards
+            memcpy(&data[directoryStart], &length, sizeof(int));
+            directoryStart -= sizeof(int); // Move backwards
+            memcpy(&data[directoryStart], &start, sizeof(int));
+        }
+    }
+
+
+    // Write the page to a file
+    // void writeToFile(const std::string& filename) {
+    //     ofstream file(filename, ios::out | ios::binary);
+    //     if (file.is_open()) {
+    //         file.write(data.data(), PAGE_SIZE);
+    //         file.close();
+    //     }
+    // }
+
+    
+    // void writeToFile(string fileName) {
+    //     ofstream file(fileName, ios::binary | ios::app);
+    //     if (file.is_open()) {
+    //         file.write(data.data(), PAGE_SIZE);
+    //         file.close();
+    //     } else {
+    //         cerr << "Failed to open .data file in Pages writeToFile function." << endl;
+    //         return;
+    //     }
+    // }
+    // Write the page to a file
+    void writeToFile(const std::string& fileName) {
+        ofstream file(fileName, ios::binary | ios::app); // Open in append mode
+        if (file.is_open()) {
+            file.write(data.data(), PAGE_SIZE);
+            file.close();
+        } else {
+            cerr << "Failed to open .data file in Pages writeToFile function." << endl;
+            return;
+        }
+}
 };
 
 
 class StorageBufferManager {
 
 private:
-    
-    const int BLOCK_SIZE = 3; // initialize the  block size allowed in main memory according to the question 
-    int numRecords;
-    // You may declare variables based on your need 
-    //const int BLOCK_SIZE = 4096;
+    // datafile that will hold pages
+    ofstream dataFile;
+    string fileName;
+
+    // Page for writing
+    Page page;
+
     // Insert new record 
     void insertRecord(Record record) {
-
-        // No records written yet
-        if (numRecords == 0) {
-            // Initialize first block
-            
+        // attemp to write the record, if no space, start a new page
+        if (!page.writeRecord(record)) {
+            // Page was full, write the slot directory to the data, then write to file
+            page.writeSlotDirectory();
+            page.writeToFile(fileName);
+            // start a new page
+            Page newPage;
+            page = newPage;
+            // don't forget to write the original record that wasn't able to be written
+            page.writeRecord(record);
         }
-        // Add record to the block
-
-
-        // Take neccessary steps if capacity is reached (you've utilized all the blocks in main memory)
-
-
     }
+
 
 public:
     StorageBufferManager(string NewFileName) {
-        
-        //initialize your variables
-
+        fileName = NewFileName; // save the name of the file for later opening
         // Create your EmployeeRelation file 
+        // Open the file for writing in binary mode
+        dataFile.open(NewFileName, ios::binary | ios::out);
 
-        
+        // error handling
+        if (!dataFile.is_open()) {
+            cerr << "Failed to open or create the .data file." << endl;
+            return;
+        }
+
+        dataFile.close();
     }
 
     // Read csv file (Employee.csv) and add records to the (EmployeeRelation)
@@ -85,15 +186,21 @@ public:
             }
 
             // create record object from the fields and store in vector
-            records.push_back(Record(fields)); // TEMP use insertrecords once implemented
+            insertRecord(Record(fields));
+            // records.push_back(Record(fields)); // TEMP use insertrecords once implemented
+        }
+
+        // write remaining page data to the file if it is not empty
+        if (page.getRecordSize() > 0) {
+            page.writeToFile(fileName);
         }
 
         file.close();
 
         // TEMP print the records to see if working
-        for (Record& record : records) {
-            record.print();
-        }
+        // for (Record& record : records) {
+        //     record.print();
+        // }
 
     }
 
@@ -102,3 +209,21 @@ public:
         
     }
 };
+
+
+
+// int main() {
+//     Page page;
+
+//     // Write records to the page
+//     page.writeRecord(record1);
+//     page.writeRecord(record2);
+
+//     // Write slot directory to the page
+//     page.writeSlotDirectory();
+
+//     // Write the page to a file
+//     page.writeToFile("page.data");
+
+//     return 0;
+// }

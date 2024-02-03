@@ -1,5 +1,8 @@
 /*
-Skeleton code for storage and buffer management
+code for storage and buffer management
+run with: 
+g++ -std=c++11 main.cpp -o main.out
+./main.out
 */
 
 #include <string>

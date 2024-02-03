@@ -25,7 +25,9 @@ public:
         manager_id = stoi(fields[3]);
     }
 
-    void print() {
+    Record(){}
+
+    void print() const {
         cout << "\tID: " << id << "\n";
         cout << "\tNAME: " << name << "\n";
         cout << "\tBIO: " << bio << "\n";
@@ -35,6 +37,25 @@ public:
     // Convert record to string representation for writing to file
     std::string toString() const {
         return std::to_string(id) + "|" + name + "|" + bio + "|" + std::to_string(manager_id) + "|";
+    }
+
+    // Convert a string record back to a record
+    static Record stringToRecord(const std::string& str) {
+    Record record;
+    std::istringstream ss(str);
+    std::string token;
+
+    // Parsing using '|' delimiter
+    std::getline(ss, token, '|');
+    record.id = stoi(token);
+
+    std::getline(ss, record.name, '|');
+    std::getline(ss, record.bio, '|');
+
+    std::getline(ss, token, '|');
+    record.manager_id = stoi(token);
+
+    return record;
     }
 };
 
@@ -52,18 +73,22 @@ public:
     }
     // Write record to the page and update slot directory
     bool writeRecord(const Record& record) {
+        // record.print();
         std::string recordString = record.toString();
         int recordLength = recordString.length();
+        size_t dirByteSize = slotDirectory.size() * sizeof(std::pair<int, int>);
 
-        if (recordLength + sizeof(int) * 2 > freeSpace) // Check if enough space is available
+        if (recordLength + sizeof(int) * 2 > freeSpace - dirByteSize) // Check if enough space is available
             return false;
 
-        int start = PAGE_SIZE - freeSpace;
+        int start = PAGE_SIZE - freeSpace - sizeof(int); // make sure to ignore the numrecords int at end (without this we'll skip first 4 bytes)
         for (char c : recordString)
             data[start++] = c;
-
+        
         slotDirectory.emplace_back(start - recordLength, recordLength);
-        freeSpace -= (recordLength + sizeof(int) * 2); // record and slotdirectory info
+
+        // cout << "offset is : \t" << start - recordLength << "\t recordLength is: " << recordLength << "\n";
+        freeSpace -= recordLength; // record
         return true;
     }
 
@@ -78,6 +103,7 @@ public:
         for (auto& entry : slotDirectory) {
             int start = entry.first;
             int length = entry.second;
+            // cout << "first entry is : " << start << "\t second is: " << length << "\n";
             directoryStart -= sizeof(int); // Move backwards
             memcpy(&data[directoryStart], &length, sizeof(int));
             directoryStart -= sizeof(int); // Move backwards
@@ -87,6 +113,7 @@ public:
     
     // Write the page to a file
     void writeToFile(const std::string& fileName) {
+        writeSlotDirectory(); // add slot directory before printing to the page
         ofstream file(fileName, ios::binary | ios::app); // Open in append mode
         if (file.is_open()) {
             file.write(data.data(), PAGE_SIZE);
@@ -94,8 +121,8 @@ public:
         } else {
             cerr << "Failed to open .data file in Pages writeToFile function." << endl;
             return;
-        }
-}
+        }  
+    }
 };
 
 
@@ -114,7 +141,6 @@ private:
         // attemp to write the record, if no space, start a new page
         if (!page.writeRecord(record)) {
             // Page was full, write the slot directory to the data, then write to file
-            page.writeSlotDirectory();
             page.writeToFile(fileName);
             // start a new page
             Page newPage;
@@ -127,10 +153,10 @@ private:
 
 public:
     StorageBufferManager(string NewFileName) {
-        fileName = NewFileName; // save the name of the file for later opening
+        fileName = NewFileName + ".data"; // save the name of the file for later opening
         // Create your EmployeeRelation file 
         // Open the file for writing in binary mode
-        dataFile.open(NewFileName, ios::binary | ios::out);
+        dataFile.open(fileName, ios::binary | ios::out);
 
         // error handling
         if (!dataFile.is_open()) {
@@ -171,12 +197,14 @@ public:
 
         // write remaining page data to the file if it is not empty
         if (page.getRecordSize() > 0) {
+            // write the remaining pages/slot directory
             page.writeToFile(fileName);
         }
 
         file.close();
 
         // TEMP print the records to see if working
+        // cout << "I'm about to print the records: \n";
         // for (Record& record : records) {
         //     record.print();
         // }
@@ -184,8 +212,50 @@ public:
     }
 
     // Given an ID, find the relevant record and print it
-    Record findRecordById(int id) {
-        
+    void findRecordById(int id) {
+        ifstream file(fileName, ios::binary);
+        if (!file.is_open()) {
+            cerr << "Failed to open file for reading." << endl;
+            return;
+        }
+
+        char buffer[PAGE_SIZE];
+        while (file.read(buffer, PAGE_SIZE)) {
+            // Read a page from the file
+            // Extract the number of records from the end of the page
+            int numRecords;
+            int slotStartIndex = PAGE_SIZE - sizeof(int); // move back from num records, offset, and size
+            memcpy(&numRecords, &buffer[PAGE_SIZE - sizeof(int)], sizeof(int));
+
+            // cout << "\tIM READING INTO THE PAGES, THE NUM OF RECORDS IS:  " << numRecords << "\n";
+
+            // Iterate through the slot directory in reverse order
+            for (int i = 0; i < numRecords; ++i) {
+                // Calculate the start index of the slot entry
+                slotStartIndex -= sizeof(int) * 2; 
+                // Extract record offset and size from the slot directory
+                int recordOffset, recordSize;
+                memcpy(&recordOffset, &buffer[slotStartIndex], sizeof(int));
+                memcpy(&recordSize, &buffer[slotStartIndex + sizeof(int)], sizeof(int));
+
+                // Extract record data from the buffer
+                string recordString(buffer + recordOffset, recordSize);
+                // Convert recordString to Record object
+                Record record = Record::stringToRecord(recordString);
+                // record.print();
+                // Check if the ID matches
+                if (record.id == id) {
+                    record.print();
+                    // file.close();
+                    // return;
+                }
+            }
+        }
+
+        file.close();
+        // Return an empty record or throw an exception if the record is not found
+        return;
     }
+
 };
 

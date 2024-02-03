@@ -23,7 +23,12 @@ int main(int argc, char* const argv[]) {
     manager.createFromFile("Employee.csv");
     
     // Loop to lookup IDs until user is ready to quit
-    
-
+    int userId = 1;
+    while (userId != 0) {
+    std::cout << "Press 0 to quit or enter the user ID to search in the data file: ";
+    std::cin >> userId;
+    // search for that id
+    manager.findRecordById(userId);
+    }
     return 0;
 }

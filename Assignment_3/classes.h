@@ -6,7 +6,7 @@
 
 // My added libraries 
 #include <fstream>
-#include <cmath> 
+#include <cmath> // for pow() funct
 #include <cstring> 
 using namespace std;
 
@@ -15,9 +15,9 @@ const int PAGE_SIZE = 4096;
 class Record {
 public:
     int id, manager_id;
-    std::string bio, name;
+    string bio, name;
 
-    Record(vector<std::string> fields) {
+    Record(vector<string> fields) {
         id = stoi(fields[0]);
         name = fields[1];
         bio = fields[2];
@@ -29,29 +29,34 @@ public:
     void print() const {
         cout << "\tID: " << id << "\n";
         cout << "\tNAME: " << name << "\n";
-        cout << "\tBIO: " << bio << "\n";
+        // Check if bio length is greater than 50 characters (dont crowd terminal)
+        if (bio.length() > 50) {
+            cout << "\tBIO: " << bio.substr(0, 50) << "...\n"; // Print only the first 50 characters followed by an ellipsis
+        } else {
+            cout << "\tBIO: " << bio << "\n"; // Print the entire bio if it's 50 characters or less
+        }
         cout << "\tMANAGER_ID: " << manager_id << "\n";
     }
 
     // Convert record to string representation for writing to file
-    std::string toString() const {
-        return std::to_string(id) + "|" + name + "|" + bio + "|" + std::to_string(manager_id) + "|";
+    string toString() const {
+        return to_string(id) + "|" + name + "|" + bio + "|" + to_string(manager_id) + "|";
     }
 
     // Convert a string record back to a record
-    static Record stringToRecord(const std::string& str) {
+    static Record stringToRecord(const string& str) {
         Record record;
-        std::istringstream ss(str);
-        std::string token;
+        istringstream ss(str);
+        string token;
 
         // Parsing using '|' delimiter
-        std::getline(ss, token, '|');
+        getline(ss, token, '|');
         record.id = stoi(token);
 
-        std::getline(ss, record.name, '|');
-        std::getline(ss, record.bio, '|');
+        getline(ss, record.name, '|');
+        getline(ss, record.bio, '|');
 
-        std::getline(ss, token, '|');
+        getline(ss, token, '|');
         record.manager_id = stoi(token);
 
         return record;
@@ -70,13 +75,11 @@ public:
     vector<pair<int, int>> slotDirectory; // (Starting position, length) of each record
     int overflow; // pointer to overflow page, 4 bytes
 
-
     // initialize a new page, freespace is space minus overflow page pointer,slot dir num_slots and freeSpace
     Page() : data(PAGE_SIZE, '\0'), freeSpace(PAGE_SIZE - sizeof(int) * 3), overflow(-1) {}
 
+    // initialize a new page with an overflow pointer.
     Page(int overflowPage) : data(PAGE_SIZE, '\0'), freeSpace(PAGE_SIZE - sizeof(int) * 3), overflow(overflowPage) {}
-    // Open a page (still have to create)
-    //Page(char )
 
     // deconstructor
     ~Page() {}
@@ -95,24 +98,14 @@ public:
     void setOverflow(int of) {
         overflow = of; 
     }
-
-    // returns a vector of records to be mofied
-    // vector<Record> getRecords() {
-    //     vector<Record> records;
-    //     for (int i = 0; i < getRecordSize(); ++i) {
-    //         string retrievedString(data.begin() + slotDirectory[i].first, data.begin() + slotDirectory[i].first + slotDirectory[i].second);
-    //         records.push_back(Record::stringToRecord(retrievedString));
-    //     }
-    // }
     
     // Write record to the page and update slot directory
-    // TODO: PROBS SAVE FILE LOCATION IN A NEW PARAMETER, PASS BY REF
     bool writeRecord(const Record& record) {
         // record.print();
-        std::string recordString = record.toString();
+        string recordString = record.toString();
         int recordLength = recordString.length();
         // sizeof slot directory, pointer to overflow page, free space, and num records
-        size_t dirByteSize = slotDirectory.size() * sizeof(std::pair<int, int>);
+        size_t dirByteSize = slotDirectory.size() * sizeof(pair<int, int>);
 
         if (recordLength + sizeof(int) * 2 > freeSpace - dirByteSize) // Assure that new record and two values for directory fit
             return false;
@@ -122,7 +115,7 @@ public:
             data[start++] = c;
 
         slotDirectory.emplace_back(start - recordLength, recordLength);
-        cout << "offset is : \t" << start - recordLength << "\t recordLength is: " << recordLength << "\n";
+        // cout << "offset is : \t" << start - recordLength << "\t recordLength is: " << recordLength << "\n";
 
         freeSpace -= recordLength; // Subtract record
         return true;
@@ -152,7 +145,7 @@ public:
         }
     }
 
-    void writeToFile(const std::string& fileName, int pageNumber) {
+    void writeToFile(const string& fileName, int pageNumber) {
         writeSlotDirectory(); // Ensure the slot directory is written to data before updating page
         
         // Open the file in read-write mode. If the file doesn't exist, it won't create a new one.
@@ -164,13 +157,31 @@ public:
         }
 
         // Calculate the offset based on the page number
-        // Note: pageNumber starts from 1, so to get to page 5, the offset is 4096 * (5 - 1)
-        int offset = PAGE_SIZE * pageNumber;
+        // Note: pageNumber starts from 0
+        int offset = PAGE_SIZE * (pageNumber);
         file.seekp(offset, ios::beg); // Seek to the correct position for writing
 
         // Write the page data to the specific location
         if (!file.write(data.data(), PAGE_SIZE)) {
             cerr << "Failed to write page to file." << endl;
+        }
+        file.close();
+    }
+
+    void appendToFile(const string& fileName) {
+        writeSlotDirectory(); // Ensure the slot directory is written to data before updating page
+
+        // Open the file in append mode. This will add data to the end of the file.
+        fstream file(fileName, ios::binary | ios::out | ios::app);
+
+        if (!file.is_open()) {
+            cerr << "Failed to open file for appending." << endl;
+            return;
+        }
+
+        // Write the page data to the end of the file
+        if (!file.write(data.data(), PAGE_SIZE)) {
+            cerr << "Failed to append page to file." << endl;
         }
         file.close();
     }
@@ -184,7 +195,9 @@ private:
     
     vector<bitset<8>> index; // hash index, size 8 sice we are assuming we wont have more than 256 regular buckets
 
-    vector<int> blockDirectory; // Map the least-significant-bits of h(id) to a bucket location in EmployeeIndex (e.g., the jth bucket)
+    vector<int> ids; // Store vector of all ID's to test at the end. FOR TESTING.
+
+    // vector<int> blockDirectory; // Map the least-significant-bits of h(id) to a bucket location in EmployeeIndex (e.g., the jth bucket)
                                 // can scan to correct bucket using j*BLOCK_SIZE as offset (using seek function)
 								// can initialize to a size of 256 (assume that we will never have more than 256 regular (i.e., non-overflow) buckets)
     int n;  // The number of indexes in blockDirectory currently being used
@@ -193,14 +206,30 @@ private:
     int nextFreeOFBlock; // Next place to write a new OF page
     string fName;      // Name of index file
     Page page;
-    int storageUsed; // 
+    int storageUsed;
+    int recordsFound; // For teting, should find 50 records
 
     // TEMP FOR ADD/REMOVE FUNCTIONALITY FOR PAGES
     int page_num = 0;
+
+    // Gets the size of the data file, used for testing.
+    void getFileSize() {
+    // Open the file in binary mode
+        ifstream file(fName, ios::binary | ios::ate);
+
+        if (file.is_open()) {
+            streampos size = file.tellg();
+            cout << "Size of the file: " << size << " bytes." << endl;
+            file.close();
+        } else {
+            cout << "UNABLE TO OPEN IN FILESIZE" << endl;
+        }
+    }
+
+
     // Insert new record into index
     void insertRecord(Record record) {
-
-        // Steps to inserting record
+        // cout << "Inserting record with name: " << record.name <<endl;
         // Increase overall used space one record at a time, uesd to see if we increase i or not
         storageUsed += record.toString().length() + sizeof(int) * 2;
         checkIncreaseStorage(); // check if we need to increase space, if we do, this will create space for our new record/reoganize pages
@@ -210,7 +239,7 @@ private:
 
         // get the index of the page that it will be stored in. May be put in bit flipped page
         int page_idx = searchLastIBits(hash);
-        // cout << page_idx << endl;
+
         // insert record at that page
         if (page_idx != -1) {
             // Read in page that record should be inserted into
@@ -219,12 +248,18 @@ private:
             while (!page.writeRecord(record)) {
                 // couldn't write page because no space, must write in overflow
                 // if overflow page exists, open it and insert record here, if space
-                if (page.getOverflow() != -1) {
+                if (page.getOverflow() > 0) { // != -1
                     page_idx = page.getOverflow() / PAGE_SIZE;
                     page = readPage(page_idx);
                 } else {
                     // overflow did not exist, create an overflow page and write the record, potential infinite loop if record is too big for one page.
-                    page = Page(nextFreeOFBlock);
+                    page.setOverflow(nextFreeOFBlock);
+                    page.writeToFile(fName, page_idx);
+
+                    // save the overflow of that page, write it back
+                    page = Page(); // Create new page that will be stored at the nextFreeOFBlock
+                    page_idx = nextFreeOFBlock / PAGE_SIZE; // write the overflow page
+                    nextFreeOFBlock += PAGE_SIZE;
                 }
             }
         } else {
@@ -238,7 +273,7 @@ private:
     void checkIncreaseStorage() {
         // Check overall space, if it is too large, we need to increase buckets n
         float load = (float) storageUsed / (float) (PAGE_SIZE * n);
-        cout << "load is: " << load << endl;
+        // cout << "load is: " << load << endl;
         if ( load >= 0.7 ) {
             // we're beyond capacity, must increase storage
             increaseStorage();
@@ -246,96 +281,113 @@ private:
     }
 
     void increaseStorage() {
-        // increase n
-        n++;
+
+        bitset<8> newIdx = bitset<8>(n); // new idx, ie: 100
+        index.push_back(newIdx);
 
         // vector to hold records that will be moved in data
-        vector<Record> toReWrite; 
-
-        // extend our hash index
-        bitset<8> newIdx = bitset<8>(n - 1);
-        index.push_back(newIdx);
+        vector<Record> toReWrite;
 
         // move the overflow page from this position, if it exists
         moveOverflow();
 
+        n++; // MOVED THIS FROM ABOVE moveOverflow()
         page = Page(); // create blank page and write it to file at new page
         page.writeToFile(fName, n - 1);
 
-        // need to extend i too? if i^2 < n, we have to increase i as well.
-        if (n > pow(i, 2)) {
+        // need to extend i too? if 2^i < n, we have to increase i as well.
+        if (n > pow(2, i)) {
             i++;
-            // reformat all previous pages, read from pages 0 - (n-1) and re-insert its records
-            for (int j = 0; j < n - 1; j++) {
-                // Read page j, rewrite records to newly indexed position
-                page = readPage(j); // two pages in memory at this point in time
+        }
+        // reformat all previous pages, read from pages 0 - (n-1) and re-insert its records
+        for (int j = 0; j < (n - 1); j++) {
+            // Read page j, rewrite records to newly indexed position
+            cleanRecords(toReWrite, j);
+        }
 
-                // TODO for each page
-                // DONT FORGET OVERFLOW PAGES
-                // for each j page and it's overflow pages (if exists)
-                do {
-                    // get record
-                    // if last i bits match newIdx, set offset in slot dir to -1 (delete from the page), add record to toRewrite vector
-                    // write the cleaned up page back to memory / delete the page
-                    // insert records from toRewrite
-                    for (int j = 0; j < page.getRecordSize(); j++) {
-                        // Get records from page
-                        string retrievedString(page.data.begin() + page.slotDirectory[j].first, page.data.begin() + page.slotDirectory[j].first + page.slotDirectory[j].second);
-                        Record record = Record::stringToRecord(retrievedString);
-                        record.print(); // test that records are correctly reading
-                        // Mask to extract the last i bits
-                        bitset<8> mask((1 << i) - 1);
+        // Write the moved records into new location
+        for (auto& record : toReWrite) {
+            // cout << "Rewriting record with name: " << record.name << endl;
+            insertRecord(record);
+        }
+    }
 
-                        // Extract the last i bits from the searchBits
-                        bitset<8> lastIBitsOfSearch = hashFunction(record.id) & mask;
+    // cleans records on specified page, setting their location value to -1, puts into moveRecords to then be reinserted at new location
+    void cleanRecords(vector<Record> &moveRecords, int page_idx) {
 
-                        // Do we have a record that we have to move?
-                        if (lastIBitsOfSearch == newIdx) {
-                            // we need to move this record
-                            // set record at j's offset to -1
-                            page.slotDirectory[j].first = -1;
-                            storageUsed -= record.toString().length() + sizeof(int) * 2;
+        // Read in page to read for records
+        page = readPage(page_idx);
+        // flag to keep track of overflow
+        // if overflow exists, loop over records
+        int hasOverflow = 1;
+        bitset<8> newIdx = bitset<8>(n - 1);
 
-                            // add the record to reWrite record list
-                            toReWrite.push_back(record);
-                        }
-                    }
+        // for each j page and it's overflow pages (if exists)
+        while (hasOverflow) {
+            // get record
+            // if last i bits match newIdx, set offset in slot dir to -1 (delete from the page), add record to toRewrite vector
+            // write the cleaned up page back to memory / delete the page
+            // insert records from toRewrite
+            for (int k = 0; k < page.getRecordSize(); k++) {
+                // Get records from page
+                string retrievedString(page.data.begin() + page.slotDirectory[k].first, page.data.begin() + page.slotDirectory[k].first + page.slotDirectory[k].second);
+                Record record = Record::stringToRecord(retrievedString);
+                // Mask to extract the last i bits
+                bitset<8> mask((1 << i) - 1);
 
-                } while (page.getOverflow() != -1);
+                // Extract the last i bits from the searchBits
+                bitset<8> lastIBitsOfSearch = hashFunction(record.id) & mask;
+                
+                // Do we have a record that we have to move?
+                if (lastIBitsOfSearch == newIdx) {
+                    // we need to move this record
+                    // set record at k's offset to -1
+                    page.slotDirectory[k].first = -1;
+                    storageUsed -= record.toString().length() + sizeof(int) * 2;
 
-
-                // ALSO need to fix the page if we only change n (but in this case only read one page)
+                    // add the record to reWrite record list
+                    moveRecords.push_back(record);
+                }
             }
+            // All records scanned in this page, write the page back to memory at original location
+            page.writeToFile(fName, page_idx);
 
-            // Write the moved records into new location
-            for (auto& record : toReWrite) {
-                insertRecord(record);
+            // Read in the overflow page if it exists
+            if (page.getOverflow() > 0) { // != -1
+                page_idx = (page.getOverflow() / PAGE_SIZE);
+                page = readPage(page_idx);
+                hasOverflow = 1;
+            } else {
+                hasOverflow = 0;
             }
+        // Repeat above actions on the overflow page, or break loop
         }
     }
 
     // Moves the overflow at the extended position to the end of the datafile.
     void moveOverflow() {
-        // Location of current overflow page
-        int overflowIdx = n * PAGE_SIZE;
+        // Location of current new page / where the overflow is stored if it exists
+        int overflowIdx = (n) * PAGE_SIZE;
         // check if a page exists here
         // if overflow Idx is not same as nextfreeofblock, we know that OF pages have been written
         if (overflowIdx != nextFreeOFBlock) {
-            // scan thru pages to find 
-            int j = 0;
-            page = readPage(j); 
-            // Find the page pointing to overflow page
-            while (page.getOverflow() != overflowIdx && j < n) {
-                page = readPage(j++);
-                cout << "searching for OF page, printing in case of infinite loop..." << endl; 
+            int matchingOFPage;
+            for (int j = 0; j < n; j++) {
+                page = readPage(j);
+                if (page.getOverflow() == overflowIdx) {
+                    matchingOFPage = j;
+                    break;
+                }
             }
             // We have now found this page, update overflow idx
             int oldOfPage = page.getOverflow();
+
             page.setOverflow(nextFreeOFBlock);
+            page.writeToFile(fName, matchingOFPage);
 
             // write the overflow page to new location
             page = readPage(oldOfPage / PAGE_SIZE);
-            page.writeToFile(fName, nextFreeOFBlock);
+            page.appendToFile(fName); // append overflow to the end of the file
         }
 
         // index nextFreeOFBlock
@@ -359,12 +411,15 @@ private:
             }
         }
 
-        // If here, no exact match found. Now, flip the MSB of the last i bits and search again.
-        int msbPosition = i - 1;  // index for the MSB in the last i bits
+        int msbPosition; // index for the MSB in the last i bits
+        if (pow(2, i) == n) {
+            // The next n increase will increase i, so check one bit over
+            msbPosition = i;
+        }  else {
+            msbPosition = i - 1;
+        }
         // Flip the MSB of the last i bits
-        cout << "Original version of last i: " << i << " bits is: " << lastIBitsOfSearch << endl;
         bitset<8> flippedLastIBitsOfSearch = lastIBitsOfSearch ^ (bitset<8>(1) << msbPosition);
-        cout << "Flipped version of last i: " << i << " bits is: "<< flippedLastIBitsOfSearch << endl;
 
         // Repeat the search with flipped MSB
         for (int j = 0; j < index.size(); j++) {
@@ -373,8 +428,9 @@ private:
                 return j; // Match found with flipped MSB
             }
         }
-
-        return -1; // No match found even after flipping MSB
+        cerr << "Coudln't find page at search bits. This shouldn't happen, terminating." << endl;
+        exit(1); 
+        // return -1; // No match found even after flipping MSB (Should not happen)
     }
 
     bitset<8> hashFunction(int id) {
@@ -383,10 +439,10 @@ private:
 
     // Write the hash index to the file to be re-retrieved later (if needed), written to very end of data file
     void writeIndexToFile() {
+
         return; //TODO
     }
 
-    
 public:
     LinearHashIndex(string indexFileName) {
         n = 4; // Start with 4 buckets in index
@@ -413,12 +469,6 @@ public:
             page = Page();
             page.writeToFile(fName, j); // write that page to file at page location j
         }
-
-        // print out binary numbers for testing
-        for (const auto& bin : index) {
-            std::cout << bin << std::endl;
-        }
-      
     }
 
     // Read csv file and add records to the index
@@ -445,27 +495,40 @@ public:
             }
 
             // create record object from the fields and store in vector
+            ids.push_back(Record(fields).id);
             insertRecord(Record(fields));
-            // records.push_back(Record(fields)); // TEMP use insertrecords once implemented
         }
 
-        // TODO: Write hash index to the end of the data file
-        // writeIndexToFile();
-        
+        // Write the index to the end of the file.
+        writeIndexToFile();
+
+        // // _______________________________
+        //  //  print out binary numbers for testing
+        // for (const auto& bin : index) {
+        //     cout << bin << endl;
+        // }
+
+        // // Search all ids for testing
+        // for (int j = 0; j < ids.size(); j++) {
+        //     cout << endl;
+        //     findRecordById(ids[j]);
+        //     cout << endl;
+        // }
+        // cout << "Total records found is: " << recordsFound << endl;
+        // // _______________________________
 
         file.close();
+        
     }
 
     // Read page #pageNumber and return as a Page variable.
     // Used to reaccess pages.
     Page readPage(int pageNumber) {
-        cout << "\tIM READING INTO THE SPECIFIED PAGE, THE PAGE NUM IS:  " << pageNumber << "\n";
-
         // read a page from memory, clean it up if deleted entries
         ifstream file(fName, ios::binary);
         if (!file.is_open()) {
             cerr << "Failed to open file for reading." << endl;
-            return 0;
+            exit(1);
         }
 
         // Calculate the offset to the desired page
@@ -475,8 +538,9 @@ public:
         vector<char> buffer(PAGE_SIZE);
         if (!file.read(buffer.data(), PAGE_SIZE)) {
             cerr << "Failed to read page from file." << endl;
-            file.close();
-            return 0;
+            cout << "THIS IS THE ERROR IM RUNNING INTO?" << endl;
+            // file.close();
+            exit(1);
         }
         file.close(); // Close the file after reading
         // [data ... data ... start_slot_dir: [(offset, size),...,(offset, size)], num_records, free_space, overflow_ptr]
@@ -492,7 +556,8 @@ public:
         // copy ptr to overflow
         memcpy(&overflowPage, &buffer[PAGE_SIZE - sizeof(int)], sizeof(int));
 
-        Page openedPage(overflowPage); // save into new page with overflow stored here
+        // cout << "OverflowPage is: " << overflowPage << " for page number: " << pageNumber << endl;
+        Page openedPage(overflowPage); // save into new page with overflow stored here, two pages in main memory now
 
         int directoryStart = PAGE_SIZE - sizeof(int) * 3;
 
@@ -511,9 +576,8 @@ public:
                 // Write the record back to the page
                 if (!openedPage.writeRecord(record)) {
                     cerr << "Failed to write record to page." << endl;
-                    return 0;
+                    exit(1);
                 }
-                // record.print();
             }
         }
 
@@ -521,7 +585,39 @@ public:
     }
 
     // Given an ID, find the relevant record and print it
-    // Record findRecordById(int id) {
-    //     return;
-    // }
+    void findRecordById(int id) {
+        int hasOverflow; // Tag to check if there is an overflow page to check
+        // Get the hash index for that id
+        int pg = searchLastIBits(hashFunction(id));
+        // read the page in at that location in memory
+        page = readPage(pg);
+
+        // Search the page and the overflow pages
+        do {
+            hasOverflow = 0; // clear flag if not first pass
+            // get record
+            // if last i bits match newIdx, set offset in slot dir to -1 (delete from the page), add record to toRewrite vector
+            // write the cleaned up page back to memory / delete the page
+            // insert records from toRewrite
+            for (int k = 0; k < page.getRecordSize(); k++) {
+                // Get records from page
+                string retrievedString(page.data.begin() + page.slotDirectory[k].first, page.data.begin() + page.slotDirectory[k].first + page.slotDirectory[k].second);
+                Record record = Record::stringToRecord(retrievedString);
+
+                // do we have a match?
+                if (id == record.id) {
+                    cout << "Record with id: " << id << " has been found in page: " << pg << " or in it's overflow." << endl;
+                    recordsFound++; // for testing all records
+                    record.print(); // Print the match to show that we've retrieved it
+                }
+            }
+
+            // Read in the overflow page if it exists
+            if (page.getOverflow() > 0) { // ORIGINAL DELETED WAS != -1
+                page = readPage(page.getOverflow() / PAGE_SIZE);
+                hasOverflow = 1;
+            }
+        // Repeat above actions on the overflow page, or break loop
+        } while (hasOverflow == 1);
+    }
 };

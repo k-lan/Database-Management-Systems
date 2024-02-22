@@ -1,5 +1,5 @@
 /*
-Skeleton code for linear hash indexing
+linear hash indexing driver
 */
 
 #include <string>
@@ -25,7 +25,15 @@ int main(int argc, char* const argv[]) {
     // emp_index.readPage(6);
 
     // Loop to lookup IDs until user is ready to quit
-    
+    int userId = 1;
+    while (userId != 0) {
+        cout << "Press 0 to quit or enter the user ID to search in the data file: ";
+        cin >> userId;
+        // search for that id
+        cout << endl;
+        emp_index.findRecordById(userId);
+        cout << endl;
+    }
 
     return 0;
 }

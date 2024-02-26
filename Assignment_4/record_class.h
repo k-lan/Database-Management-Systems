@@ -14,14 +14,30 @@ class Records{
         int eid;
         string ename;
         int age;
-        double salary;
+        int salary; // modified to int to avoid scientific notation in output
     }emp_record;
 
-    /*** You can add more variables if you want below ***/
-
     int no_values = 0; //You can use this to check if you've don't have any more tuples
-    int number_of_emp_records = 0; // Tracks number of emp_records you have on the buffer
+
+    // Function to print eid and ename of the emp_record
+    void printEmpRecord() const {
+        cout << "EID: " << emp_record.eid << "\t Name: " << emp_record.ename << "\t no_values: " << no_values << endl;
+    }
+
+    // clear the records
+    void reset() {
+        emp_record.eid = 0;
+        emp_record.ename = "";
+        emp_record.age = 0;
+        emp_record.salary = 0;
+        no_values = 0;
+    }
 };
+
+// Compare two records to see which is larger. This is for sorting
+bool compareByEID(const Records& record1, const Records& record2) {
+    return record1.emp_record.eid < record2.emp_record.eid;
+}
 
 // Grab a single block from the Emp.csv file and put it inside the EmpRecord structure of the Records Class
 Records Grab_Emp_Record(fstream &empin) {
@@ -39,7 +55,7 @@ Records Grab_Emp_Record(fstream &empin) {
         getline(s, word, ',');
         emp.emp_record.age = stoi(word);
         getline(s, word, ',');
-        emp.emp_record.salary = stod(word);
+        emp.emp_record.salary = stoi(word);
 
         return emp;
     } else {

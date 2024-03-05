@@ -137,22 +137,14 @@ void mergeJoinRuns(fstream& outputFile){
             // join the records
             buffers[smallest_emp_idx].joinRecords(buffers[smallest_dept_idx]);
             printJoin(outputFile, buffers[smallest_emp_idx]);
-            // read in the next record from emp and dept
-            // emp here
-            fstream file(emp_temp_files[smallest_emp_idx].first, ios::in);
-            file.seekg(emp_temp_files[smallest_emp_idx].second);
-            buffers[smallest_emp_idx] = Grab_Emp_Record(file);
-            emp_temp_files[smallest_emp_idx].second = file.tellg();
-            file.close();
-            // dept here
+            // read in the next record from dept only since one emp may have multiple depts.
             // have to find the index of the dept file
             fstream dept_file(dept_temp_files[dept_file_idx].first, ios::in);
             dept_file.seekg(dept_temp_files[dept_file_idx].second);
             buffers[smallest_dept_idx] = Grab_Dept_Record(dept_file);
             dept_temp_files[dept_file_idx].second = dept_file.tellg();
             dept_file.close();
-            // Grad next two records
-            findSmallestEmpEIDIndex(smallest_emp_idx);
+            // Grad next record
             findSmallestDeptEIDIndex(smallest_dept_idx);
 
         } else if (buffers[smallest_emp_idx].emp_record.eid < buffers[smallest_dept_idx].dept_record.managerid) {

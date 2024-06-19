@@ -6,7 +6,6 @@
 #include <bitset>
 #include <cstring>
 
-// Can I use?
 #include <fstream>
 
 using namespace std;

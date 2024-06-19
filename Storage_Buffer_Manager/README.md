@@ -4,7 +4,8 @@ This project implements a simple storage buffer manager in C++ to manage records
 
 ## Files
 
-- **main.cpp**: The main implementation file containing the Record, Page, and StorageBufferManager classes and the main function.
+- **main.cpp**: The file containing the main function.
+- **classes.h**: The main implementation file containing the Record, Page, and StorageBufferManager classes.
 
 ## Classes
 
